@@ -25,12 +25,10 @@ export default function Page() {
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<CheckState | undefined>(undefined);
 
-  // Map data layer
   const [mapMode, setMapMode]         = useState<MapMode>("morbidity");
   const [waterKey, setWaterKey]       = useState("safe_water_pct");
   const [emissionsKey, setEmissionsKey] = useState("total_kt");
 
-  // Compare mode
   const [compareMode, setCompareMode]   = useState(false);
   const [compareCodes, setCompareCodes] = useState<string[]>([]);
 
@@ -44,7 +42,6 @@ export default function Page() {
       .catch(() => setData(null));
   }, []);
 
-  // Base value extractor that accepts year explicitly — used for time-series in ComparePanel
   const getSeriesValue = useCallback(
     (r: RegionData, y: string): number | null => {
       switch (mapMode) {
@@ -73,7 +70,6 @@ export default function Page() {
     [mapMode, disease, waterKey, emissionsKey]
   );
 
-  // Single-year value for map coloring / stats bar / ranking
   const getRegionValue = useCallback(
     (r: RegionData | undefined): number | null =>
       r ? getSeriesValue(r, year) : null,
@@ -85,12 +81,10 @@ export default function Page() {
     return computeDomain(data.regions.map((r) => getRegionValue(r)));
   }, [data, getRegionValue]);
 
-  // safe_water_pct and pipe_violation_pct (compliant %) → higher is better → invert color scale
   const invertColors =
     mapMode === "water" &&
     (waterKey === "safe_water_pct" || waterKey === "pipe_violation_pct");
 
-  // Absolute-number getter for the morbidity ranking column toggle
   const getAbsoluteValue = useMemo(() => {
     if (mapMode !== "morbidity") return undefined;
     return (r: RegionData | undefined): number | null =>
@@ -130,7 +124,6 @@ export default function Page() {
     [mapMode, emissionsKey]
   );
 
-  // GeoJSON key — includes compare set so the layer re-renders when selection changes
   const valKey = compareMode
     ? `cmp-${compareCodes.slice().sort().join(",")}-${mapMode}-${year}-${waterKey}-${emissionsKey}`
     : `${mapMode}-${disease}-${year}-${waterKey}-${emissionsKey}`;
@@ -243,7 +236,6 @@ export default function Page() {
                 invertColors={invertColors}
               />
 
-              {/* ── Compare mode bar ── */}
               <div className="compare-bar">
                 {!compareMode ? (
                   <button className="compare-enter-btn" onClick={enterCompareMode}>

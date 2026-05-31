@@ -36,7 +36,6 @@ export default function RegionRanking({
       <div className="ranking-header">
         <div className="ranking-title">Рейтинг регионов</div>
 
-        {/* Column toggle — only shown when absolute values are available */}
         {getAbsoluteValue && (
           <div className="pills" style={{ gap: 3 }}>
             <button

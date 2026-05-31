@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc *)",
-      "WebFetch(domain:gisss.ru)"
+      "WebFetch(domain:gisss.ru)",
+      "Bash(go build *)"
     ]
   }
 }
