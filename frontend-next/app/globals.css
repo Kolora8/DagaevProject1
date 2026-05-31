@@ -1,0 +1,149 @@
+:root{
+  --bg:#0f1724; --panel:#16213a; --panel2:#1d2b4a; --line:#27395f;
+  --ink:#e8eefb; --muted:#9fb0d0; --accent:#4f9dff; --accent2:#34d399;
+  --warn:#fbbf24; --tile:#22406b; --tile-hi:#3b6fb5;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+
+header{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,#13203a,#0f1724)}
+header h1{font-size:20px;margin:0}
+header .sub{color:var(--muted);font-size:13px}
+.status{margin-left:auto;font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line)}
+.status.on{color:var(--accent2);border-color:var(--accent2)}
+.status.off{color:var(--warn);border-color:var(--warn)}
+
+.wrap{display:grid;grid-template-columns:1fr 420px;height:calc(100vh - 64px)}
+.mapwrap{padding:24px;overflow:hidden;display:flex;flex-direction:column}
+
+/* Leaflet-карта (политическая карта России из GeoJSON) */
+.leaflet-russia{
+  flex:1;min-height:420px;width:100%;
+  background:transparent;border:1px solid var(--line);border-radius:12px;
+}
+.leaflet-container{background:#0c1322 !important}
+.leaflet-russia .leaflet-interactive{transition:fill .15s, fill-opacity .15s}
+/* убираем прямоугольную рамку фокуса вокруг выбранного региона */
+.leaflet-russia .leaflet-interactive:focus,
+.leaflet-container svg path:focus{outline:none}
+.leaflet-russia path.leaflet-interactive{outline:none}
+.leaflet-tooltip{
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+  border-radius:6px;font-size:12px;box-shadow:0 6px 14px rgba(0,0,0,.4)
+}
+.leaflet-tooltip::before{display:none}
+.leaflet-control-zoom a{background:var(--panel2);color:var(--ink);border-color:var(--line)}
+.legend{color:var(--muted);font-size:13px;margin-bottom:14px}
+
+.map{display:grid;grid-auto-rows:64px;gap:8px;perspective:1100px;min-width:1000px}
+.tile{
+  background:var(--tile);border:1px solid #2f5085;border-radius:10px;
+  display:flex;flex-direction:column;justify-content:center;align-items:center;
+  cursor:pointer;transition:transform .18s ease, box-shadow .18s ease, background .18s;
+  transform-style:preserve-3d;padding:4px;text-align:center;color:inherit;font:inherit;
+}
+.tile .code{font-weight:700;font-size:14px}
+.tile .val{font-size:11px;color:var(--muted)}
+.tile:hover{background:var(--tile-hi);transform:translateZ(18px) rotateX(8deg);box-shadow:0 16px 26px rgba(0,0,0,.45)}
+.tile.active{
+  background:linear-gradient(160deg,#4f9dff,#2563c9);
+  transform:translateZ(40px) rotateX(10deg) scale(1.04);
+  box-shadow:0 26px 42px rgba(0,0,0,.55);border-color:#bcd6ff;
+}
+.tile.active .val{color:#dceaff}
+
+/* реальная SVG-карта (политическая карта России) */
+.map-note{color:var(--warn);font-size:12px;margin-bottom:12px}
+.map-note code{background:#142544;padding:2px 5px;border-radius:4px}
+.svgmap{width:100%;max-width:1400px;margin:0 auto}
+.svgmap svg{display:block;width:100%;height:auto}
+/* регионы без данных в БД — приглушённые */
+.svgmap .rg-empty{fill:#243a5e;stroke:#16243d;stroke-width:.5}
+.svgmap .rg-empty path,.svgmap .rg-empty polygon{fill:#243a5e}
+/* регионы с данными — кликабельные, «поднимаются» при наведении/выборе */
+.svgmap .rg-data{stroke:#0e1b33;stroke-width:.6;transition:filter .18s ease, transform .18s ease}
+.svgmap .rg-data:hover{filter:brightness(1.25) drop-shadow(0 6px 8px rgba(0,0,0,.55))}
+.svgmap .rg-active{
+  filter:brightness(1.35) drop-shadow(0 10px 14px rgba(0,0,0,.65));
+  stroke:#bcd6ff;stroke-width:1.2;
+}
+
+/* фильтры над картой */
+.controls{margin-bottom:12px}
+.ctl-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.ctl-label{color:var(--muted);font-size:13px}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{background:#142544;border:1px solid var(--line);color:var(--muted);border-radius:18px;padding:6px 12px;font-size:12px}
+.pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.legend-bar{max-width:420px}
+.legend-cap{font-size:11px;color:var(--muted)}
+.legend-grad{height:10px;border-radius:5px;margin:4px 0 2px;
+  background:linear-gradient(90deg,hsl(210,72%,52%),hsl(157,72%,52%),hsl(105,72%,52%),hsl(52,72%,52%),hsl(0,72%,52%))}
+.legend-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
+
+/* таблица заболеваемости */
+.dtable{width:100%;border-collapse:collapse;font-size:13px}
+.dtable td{padding:6px 4px;border-top:1px solid var(--line)}
+.dtable tr:first-child td{border-top:none}
+.dtable td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.dtable td.muted{color:var(--muted);font-weight:400}
+.dtable tr.row-on{background:#142544}
+.dtable tr.row-on td:first-child{color:var(--accent)}
+.thint,.chart-legend{color:var(--muted);font-size:11px;margin-top:6px}
+.linechart{width:100%;height:auto;display:block}
+.chart-legend{display:flex;gap:14px}
+.chart-legend span{display:inline-flex;align-items:center;gap:5px}
+.chart-legend i{width:12px;height:3px;border-radius:2px;display:inline-block}
+
+aside{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:20px}
+aside .empty{color:var(--muted);margin-top:40px;text-align:center}
+h2{font-size:18px;margin:0 0 4px}
+.okrug{color:var(--muted);font-size:13px;margin-bottom:16px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px}
+.card h3{margin:0 0 10px;font-size:14px;color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#142544;border-radius:8px;padding:8px 10px}
+.metric .k{font-size:11px;color:var(--muted)}
+.metric .v{font-size:18px;font-weight:700;margin-top:2px}
+.fc{border-top:1px solid var(--line);padding:10px 0}
+.fc:first-of-type{border-top:none}
+.fc .name{font-size:13px}
+.fc .yr{color:var(--muted);font-size:11px}
+.fc-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+input,select,textarea{background:#0e1b33;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit}
+input[type=number]{width:90px}
+.fc-row input.note{flex:1}
+button{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 12px;font-size:13px;cursor:pointer;font-weight:600}
+button.sm{padding:6px 10px;font-size:12px}
+button:hover{filter:brightness(1.08)}
+.dev{display:flex;justify-content:space-between;align-items:center;background:#142544;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
+.dev .meta{color:var(--muted);font-size:11px}
+.dev-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.dev-form input{width:100%}
+.dev-form .full{grid-column:1/3}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#04230f;padding:10px 18px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+
+/* ===== Админ-панель ===== */
+.admin-center{min-height:100vh;display:flex;align-items:center;justify-content:center}
+.login-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;width:320px;display:flex;flex-direction:column;gap:12px}
+.login-card h1{margin:0;font-size:20px}
+.login-card .sub{color:var(--muted);font-size:13px;margin:0 0 6px}
+.login-card input{width:100%}
+.login-err{color:var(--danger);font-size:13px}
+.back-link{color:var(--accent);font-size:13px;text-decoration:none}
+.admin-wrap{max-width:900px;margin:0 auto;padding:24px}
+.admin-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.admin-head h1{margin:0;font-size:22px}
+.admin-head .sub{color:var(--muted);font-size:13px}
+.admin-actions{display:flex;gap:10px;align-items:center}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.admin-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+.form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.form-grid label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.form-grid select,.form-grid input{width:100%}
+.save-row{display:flex;align-items:center;gap:14px;margin-top:4px}
+.save-msg{color:var(--accent2);font-size:13px}
+.hint{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.5}
+.hint code{background:#142544;padding:1px 5px;border-radius:4px}

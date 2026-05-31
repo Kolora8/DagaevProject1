@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЗдравМонитор — мониторинг здравоохранения регионов РФ</title>
+<style>
+  :root{
+    --bg:#0f1724; --panel:#16213a; --panel2:#1d2b4a; --line:#27395f;
+    --ink:#e8eefb; --muted:#9fb0d0; --accent:#4f9dff; --accent2:#34d399;
+    --warn:#fbbf24; --danger:#f87171; --tile:#22406b; --tile-hi:#3b6fb5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,#13203a,#0f1724)}
+  header h1{font-size:20px;margin:0}
+  header .sub{color:var(--muted);font-size:13px}
+  .status{margin-left:auto;font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line)}
+  .status.on{color:var(--accent2);border-color:var(--accent2)}
+  .status.off{color:var(--warn);border-color:var(--warn)}
+  .wrap{display:grid;grid-template-columns:1fr 420px;gap:0;height:calc(100vh - 64px)}
+  .mapwrap{padding:24px;overflow:auto}
+  .legend{color:var(--muted);font-size:13px;margin-bottom:14px}
+  /* карта-картограмма из плиток */
+  .map{display:grid;grid-auto-rows:64px;gap:8px;perspective:1100px;min-width:1000px}
+  .tile{
+    grid-column:var(--gx);grid-row:var(--gy);
+    background:var(--tile);border:1px solid #2f5085;border-radius:10px;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+    cursor:pointer;transition:transform .18s ease, box-shadow .18s ease, background .18s;
+    transform-style:preserve-3d;padding:4px;text-align:center;
+  }
+  .tile .code{font-weight:700;font-size:14px}
+  .tile .val{font-size:11px;color:var(--muted)}
+  .tile:hover{background:var(--tile-hi);transform:translateZ(18px) rotateX(8deg);box-shadow:0 16px 26px rgba(0,0,0,.45)}
+  .tile.active{
+    background:linear-gradient(160deg,#4f9dff,#2563c9);
+    transform:translateZ(40px) rotateX(10deg) scale(1.04);
+    box-shadow:0 26px 42px rgba(0,0,0,.55);border-color:#bcd6ff;
+  }
+  .tile.active .val{color:#dceaff}
+  /* боковая панель */
+  aside{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:20px}
+  aside .empty{color:var(--muted);margin-top:40px;text-align:center}
+  h2{font-size:18px;margin:0 0 4px}
+  .okrug{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px}
+  .card h3{margin:0 0 10px;font-size:14px;color:var(--accent)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .metric{background:#142544;border-radius:8px;padding:8px 10px}
+  .metric .k{font-size:11px;color:var(--muted)}
+  .metric .v{font-size:18px;font-weight:700;margin-top:2px}
+  .fc{border-top:1px solid var(--line);padding:10px 0}
+  .fc:first-of-type{border-top:none}
+  .fc .name{font-size:13px}
+  .fc .yr{color:var(--muted);font-size:11px}
+  .fc-row{display:flex;align-items:center;gap:8px;margin-top:6px}
+  input,select,textarea{background:#0e1b33;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit}
+  input[type=number]{width:90px}
+  .fc-row input.note{flex:1}
+  button{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 12px;font-size:13px;cursor:pointer;font-weight:600}
+  button.sm{padding:6px 10px;font-size:12px}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button:hover{filter:brightness(1.08)}
+  .dev{display:flex;justify-content:space-between;align-items:center;background:#142544;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px}
+  .dev .meta{color:var(--muted);font-size:11px}
+  .dev-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .dev-form input{width:100%}
+  .dev-form .full{grid-column:1/3}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#04230f;padding:10px 18px;border-radius:8px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.show{opacity:1}
+  .saved{color:var(--accent2);font-size:11px;margin-left:4px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ЗдравМонитор</h1>
+    <div class="sub">Мониторинг и прогнозирование здравоохранения субъектов Российской Федерации</div>
+  </div>
+  <div id="status" class="status off">Режим: демо-данные</div>
+</header>
+
+<div class="wrap">
+  <div class="mapwrap">
+    <div class="legend">Выберите регион на карте — плитка «поднимется», а справа появятся текущие показатели, редактируемые прогнозы и оборудование.</div>
+    <div id="map" class="map"></div>
+  </div>
+  <aside id="panel">
+    <div class="empty">← Выберите регион на карте</div>
+  </aside>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API = "/api"; // при запуске Go-сервера фронтенд раздаётся им же
+let API_ONLINE = false;
+let regions = [];
+let activeId = null;
+
+// ---------- ДЕМО-ДАННЫЕ (работают при открытии файла без сервера) ----------
+const MOCK_REGIONS = [
+ {id:1,code:'MOW',name:'Москва',federal_okrug:'Центральный',population:13100000,grid_x:5,grid_y:3},
+ {id:2,code:'MOS',name:'Московская область',federal_okrug:'Центральный',population:8500000,grid_x:5,grid_y:2},
+ {id:3,code:'SPE',name:'Санкт-Петербург',federal_okrug:'Северо-Западный',population:5600000,grid_x:4,grid_y:1},
+ {id:4,code:'LEN',name:'Ленинградская область',federal_okrug:'Северо-Западный',population:2000000,grid_x:4,grid_y:0},
+ {id:5,code:'KDA',name:'Краснодарский край',federal_okrug:'Южный',population:5800000,grid_x:4,grid_y:5},
+ {id:6,code:'ROS',name:'Ростовская область',federal_okrug:'Южный',population:4200000,grid_x:5,grid_y:5},
+ {id:7,code:'TAT',name:'Республика Татарстан',federal_okrug:'Приволжский',population:3900000,grid_x:7,grid_y:3},
+ {id:8,code:'NIZ',name:'Нижегородская область',federal_okrug:'Приволжский',population:3200000,grid_x:6,grid_y:3},
+ {id:9,code:'SAM',name:'Самарская область',federal_okrug:'Приволжский',population:3200000,grid_x:7,grid_y:4},
+ {id:10,code:'SVE',name:'Свердловская область',federal_okrug:'Уральский',population:4300000,grid_x:9,grid_y:2},
+ {id:11,code:'CHE',name:'Челябинская область',federal_okrug:'Уральский',population:3400000,grid_x:9,grid_y:3},
+ {id:12,code:'NVS',name:'Новосибирская область',federal_okrug:'Сибирский',population:2800000,grid_x:11,grid_y:3},
+ {id:13,code:'KYA',name:'Красноярский край',federal_okrug:'Сибирский',population:2900000,grid_x:10,grid_y:2},
+ {id:14,code:'IRK',name:'Иркутская область',federal_okrug:'Сибирский',population:2400000,grid_x:12,grid_y:3},
+ {id:15,code:'PRI',name:'Приморский край',federal_okrug:'Дальневосточный',population:1900000,grid_x:14,grid_y:4},
+ {id:16,code:'KHA',name:'Хабаровский край',federal_okrug:'Дальневосточный',population:1300000,grid_x:14,grid_y:3},
+ {id:17,code:'VOR',name:'Воронежская область',federal_okrug:'Центральный',population:2300000,grid_x:5,grid_y:4},
+ {id:18,code:'BAS',name:'Республика Башкортостан',federal_okrug:'Приволжский',population:4000000,grid_x:8,grid_y:3},
+];
+const mockDetail = {}; // кэш детальных данных в демо-режиме
+function rnd(a,b){return Math.round((a+Math.random()*(b-a))*10)/10}
+function buildMockDetail(r){
+  if(mockDetail[r.id]) return mockDetail[r.id];
+  const d = {
+    region:r,
+    indicators:{period:'2026-Q1',hospitals:Math.round(40+r.population/200000),
+      doctors_per_10k:rnd(38,58),beds_per_10k:rnd(70,110),
+      life_expectancy:rnd(70,76),incidence_rate:rnd(600,1000)},
+    forecasts:[
+      {id:r.id*100+1,horizon_year:2027,metric:'Ожидаемая продолжительность жизни',value:rnd(72,77),unit:'лет',note:'Базовый сценарий'},
+      {id:r.id*100+2,horizon_year:2027,metric:'Обеспеченность врачами',value:rnd(42,60),unit:'на 10 тыс.',note:'Целевой показатель нацпроекта'},
+    ],
+    devices:[
+      {id:r.id*1000+1,name:'Аппарат ИВЛ',category:'ИВЛ',quantity:Math.round(5+Math.random()*20),status:'в эксплуатации'},
+    ]
+  };
+  mockDetail[r.id]=d; return d;
+}
+
+// ---------- сеть с откатом в демо ----------
+async function api(path, opts){
+  const res = await fetch(API+path, opts);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  return res.json();
+}
+
+async function init(){
+  try{
+    regions = await api('/regions');
+    API_ONLINE = true;
+    const s=document.getElementById('status');
+    s.textContent='Режим: сервер Go + PostgreSQL'; s.className='status on';
+  }catch(e){
+    regions = MOCK_REGIONS;
+    API_ONLINE = false;
+  }
+  renderMap();
+}
+
+function renderMap(){
+  const map = document.getElementById('map');
+  map.innerHTML='';
+  regions.forEach(r=>{
+    const t=document.createElement('div');
+    t.className='tile'; t.dataset.id=r.id;
+    t.style.setProperty('--gx', r.grid_x+1);
+    t.style.setProperty('--gy', r.grid_y+1);
+    const le = r.life_expectancy ? ('ОПЖ '+r.life_expectancy) : '';
+    t.innerHTML = `<div class="code">${r.code}</div><div class="val">${le}</div>`;
+    t.title = r.name;
+    t.onclick=()=>selectRegion(r.id, t);
+    map.appendChild(t);
+  });
+}
+
+async function selectRegion(id, tile){
+  document.querySelectorAll('.tile').forEach(x=>x.classList.remove('active'));
+  tile.classList.add('active');
+  activeId=id;
+  let d;
+  if(API_ONLINE){
+    try{ d = await api('/regions/'+id); }
+    catch(e){ d = buildMockDetail(regions.find(r=>r.id===id)); }
+  } else {
+    d = buildMockDetail(regions.find(r=>r.id===id));
+  }
+  renderPanel(d);
+}
+
+function num(v){ return (v==null)?'—':Number(v).toLocaleString('ru-RU'); }
+
+function renderPanel(d){
+  const p=document.getElementById('panel');
+  const r=d.region, i=d.indicators;
+  let html = `<h2>${r.name}</h2><div class="okrug">${r.federal_okrug||''} ФО · население ${num(r.population)}</div>`;
+
+  // текущие показатели
+  html += `<div class="card"><h3>Текущие показатели · ${i?i.period:'—'}</h3><div class="grid2">`;
+  if(i){
+    html += metric('Больниц', i.hospitals);
+    html += metric('Врачей на 10 тыс.', i.doctors_per_10k);
+    html += metric('Коек на 10 тыс.', i.beds_per_10k);
+    html += metric('ОПЖ, лет', i.life_expectancy);
+    html += metric('Заболеваемость /100 тыс.', i.incidence_rate);
+  } else { html += '<div class="metric"><div class="k">нет данных</div></div>'; }
+  html += `</div></div>`;
+
+  // редактируемые прогнозы
+  html += `<div class="card"><h3>Прогнозы (редактируемые)</h3>`;
+  d.forecasts.forEach(f=>{
+    html += `<div class="fc" data-fid="${f.id}">
+      <div class="name">${f.metric} <span class="yr">· ${f.horizon_year}</span></div>
+      <div class="fc-row">
+        <input type="number" step="0.1" class="val" value="${f.value}">
+        <span class="yr">${f.unit||''}</span>
+        <input type="text" class="note" placeholder="комментарий" value="${(f.note||'').replace(/"/g,'&quot;')}">
+        <button class="sm" onclick="saveForecast(${f.id}, this)">Сохранить</button>
+      </div></div>`;
+  });
+  if(d.forecasts.length===0) html += `<div class="okrug">Прогнозы не заданы</div>`;
+  html += `</div>`;
+
+  // оборудование
+  html += `<div class="card"><h3>Медицинское оборудование</h3><div id="devlist">`;
+  d.devices.forEach(dev=>{ html += devRow(dev); });
+  if(d.devices.length===0) html += `<div class="okrug">Оборудование не добавлено</div>`;
+  html += `</div>
+    <div class="dev-form">
+      <input id="dev-name" class="full" placeholder="Наименование устройства">
+      <input id="dev-cat" placeholder="Категория (МРТ, КТ…)">
+      <input id="dev-qty" type="number" min="1" value="1" placeholder="Кол-во">
+      <button class="full" onclick="addDevice()">+ Добавить устройство</button>
+    </div></div>`;
+
+  p.innerHTML = html;
+}
+
+function metric(k,v){ return `<div class="metric"><div class="k">${k}</div><div class="v">${num(v)}</div></div>`; }
+function devRow(dev){
+  return `<div class="dev"><div><div>${dev.name}</div><div class="meta">${dev.category||'—'} · ${dev.status}</div></div><div class="v">${dev.quantity} шт.</div></div>`;
+}
+
+async function saveForecast(fid, btn){
+  const row = btn.closest('.fc');
+  const value = parseFloat(row.querySelector('.val').value);
+  const note = row.querySelector('.note').value;
+  if(API_ONLINE){
+    try{
+      await api('/forecasts/'+fid, {method:'PUT',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({value, note})});
+    }catch(e){ toast('Ошибка сохранения'); return; }
+  } else {
+    // обновляем кэш демо
+    const d = mockDetail[activeId];
+    const f = d.forecasts.find(x=>x.id===fid);
+    if(f){ f.value=value; f.note=note; }
+  }
+  toast('Прогноз сохранён');
+}
+
+async function addDevice(){
+  const name=document.getElementById('dev-name').value.trim();
+  const category=document.getElementById('dev-cat').value.trim();
+  const quantity=parseInt(document.getElementById('dev-qty').value)||1;
+  if(!name){ toast('Укажите наименование'); return; }
+  const payload={name,category,quantity,status:'в эксплуатации'};
+  let dev;
+  if(API_ONLINE){
+    try{ dev = await api('/regions/'+activeId+'/devices',
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); }
+    catch(e){ toast('Ошибка добавления'); return; }
+  } else {
+    dev={id:Date.now(),...payload};
+    mockDetail[activeId].devices.push(dev);
+  }
+  document.getElementById('devlist').insertAdjacentHTML('beforeend', devRow(dev));
+  document.getElementById('dev-name').value='';
+  document.getElementById('dev-cat').value='';
+  document.getElementById('dev-qty').value='1';
+  toast('Устройство добавлено');
+}
+
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+init();
+</script>
+</body>
+</html>
