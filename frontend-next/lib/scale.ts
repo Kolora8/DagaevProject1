@@ -1,12 +1,13 @@
 // Единая цветовая шкала для карты и легенды (синий = мало, красный = много).
 export function colorFor(
   value: number | null,
-  domain: [number, number]
+  domain: [number, number],
+  invert = false  // true = higher value → blue (e.g. safe water %)
 ): string {
   if (value == null || !isFinite(value)) return "#243a5e"; // нет данных
   const [min, max] = domain;
   const t = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0.5;
-  const hue = 210 - 210 * t; // 210 (синий) -> 0 (красный)
+  const hue = 210 - 210 * (invert ? 1 - t : t); // 210 (синий) -> 0 (красный)
   return `hsl(${hue}, 72%, 52%)`;
 }
 

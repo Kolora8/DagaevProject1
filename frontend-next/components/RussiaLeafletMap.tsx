@@ -5,7 +5,7 @@ import { MapContainer, GeoJSON } from "react-leaflet";
 import type { Layer, PathOptions } from "leaflet";
 import type { Feature, FeatureCollection } from "geojson";
 import "leaflet/dist/leaflet.css";
-import { RegionData, per100k } from "@/lib/dataset";
+import { RegionData } from "@/lib/dataset";
 import { matchByName } from "@/lib/regionMatch";
 import { colorFor } from "@/lib/scale";
 
@@ -28,15 +28,19 @@ function fixAntimeridian(node: unknown): void {
 
 export default function RussiaLeafletMap({
   regions,
-  disease,
-  year,
+  getRegionValue,
+  formatValue,
+  invertColors,
+  valKey,
   domain,
   activeCode,
   onSelect,
 }: {
   regions: RegionData[];
-  disease: string;
-  year: string;
+  getRegionValue: (r: RegionData | undefined) => number | null;
+  formatValue: (v: number | null) => string;
+  invertColors: boolean;
+  valKey: string;
   domain: [number, number];
   activeCode: string | null;
   onSelect: (code: string) => void;
@@ -75,10 +79,10 @@ export default function RussiaLeafletMap({
   const styleFn = (feature?: Feature): PathOptions => {
     const name = (feature?.properties?.name as string) || "";
     const r = matchByName(name, regions);
-    const value = per100k(r, disease, year);
+    const value = getRegionValue(r);
     const active = !!r && r.code === activeCode;
     return {
-      fillColor: colorFor(value, domain),
+      fillColor: colorFor(value, domain, invertColors),
       color: active ? "#ffffff" : "#0e1b33",
       weight: active ? 2.4 : 0.6,
       fillOpacity: r ? 0.92 : 0.5,
@@ -88,10 +92,9 @@ export default function RussiaLeafletMap({
   const onEach = (feature: Feature, layer: Layer) => {
     const name = (feature.properties?.name as string) || "";
     const r = matchByName(name, regions);
-    const value = per100k(r, disease, year);
+    const value = getRegionValue(r);
     const label =
-      (r?.name || name) +
-      (value != null ? `: ${value.toLocaleString("ru-RU")} /100 тыс.` : "");
+      (r?.name || name) + (value != null ? `: ${formatValue(value)}` : "");
     layer.bindTooltip(label, { sticky: true });
     if (r) {
       layer.on("click", () => onSelect(r.code));
@@ -121,7 +124,7 @@ export default function RussiaLeafletMap({
       worldCopyJump={false}
     >
       <GeoJSON
-        key={`${disease}-${year}-${activeCode ?? "none"}`}
+        key={`${valKey}-${activeCode ?? "none"}`}
         data={geo}
         style={styleFn}
         onEachFeature={onEach}
