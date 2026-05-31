@@ -21,7 +21,6 @@ export default function RegionRanking({
   const [showAbsolute, setShowAbsolute] = useState(false);
 
   const useAbsolute = showAbsolute && !!getAbsoluteValue;
-  const getValue = useAbsolute ? getAbsoluteValue! : getRegionValue;
 
   const ranked = [...regions]
     .map((r) => ({ r, v: getRegionValue(r), abs: getAbsoluteValue?.(r) ?? null }))

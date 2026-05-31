@@ -882,6 +882,23 @@ aside::-webkit-scrollbar-thumb {
 .trend.down   { color: var(--accent2); }
 .trend.neutral { color: var(--muted); }
 
+/* ---- Context section headers ---- */
+
+.ctx-section {
+  margin-bottom: 12px;
+}
+
+.ctx-section:last-child { margin-bottom: 0; }
+
+.ctx-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted2);
+  margin-bottom: 7px;
+}
+
 /* ---- Metrics Grid ---- */
 
 .grid2 {
@@ -889,6 +906,8 @@ aside::-webkit-scrollbar-thumb {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+
+.metric--full { grid-column: 1 / -1; }
 
 .metric {
   background: var(--panel3);

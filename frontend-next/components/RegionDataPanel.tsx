@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dataset, RegionData } from "@/lib/dataset";
 import {
   computeForecast,
@@ -44,6 +44,28 @@ function TrendBadge({ pct, invert = false }: { pct: number | null; invert?: bool
   );
 }
 
+function CtxMetric({
+  label,
+  value,
+  pct,
+  invert = false,
+  full = false,
+}: {
+  label: string;
+  value: number | null | undefined;
+  pct?: number | null;
+  invert?: boolean;
+  full?: boolean;
+}) {
+  return (
+    <div className={"metric" + (full ? " metric--full" : "")}>
+      <div className="k">{label}</div>
+      <div className="v">{fmt(value)}</div>
+      {pct !== undefined && <TrendBadge pct={pct} invert={invert} />}
+    </div>
+  );
+}
+
 export default function RegionDataPanel({
   region,
   data,
@@ -57,6 +79,11 @@ export default function RegionDataPanel({
 }) {
   const [forecastMode, setForecastMode] = useState<ForecastMode>("none");
 
+  // Reset forecast when the user switches region or disease
+  useEffect(() => {
+    setForecastMode("none");
+  }, [region.code, disease]);
+
   const { years, diseases } = data.meta;
   const diseaseLabel = diseases.find((d) => d.key === disease)?.label || disease;
 
@@ -65,39 +92,41 @@ export default function RegionDataPanel({
 
   const mYear = region.morbidity[year] || {};
   const mPrev = prevYear ? region.morbidity[prevYear] || {} : null;
-  const water = region.water_quality[year];
+  const water     = region.water_quality[year];
   const waterPrev = prevYear ? region.water_quality[prevYear] : null;
-  const births = region.births[year];
+  const births     = region.births[year];
   const birthsPrev = prevYear ? region.births[prevYear] : null;
-  const em = region.emissions[year];
+  const em     = region.emissions[year];
   const emPrev = prevYear ? region.emissions[prevYear] : null;
 
-  // Historical data points
-  const regionPoints = years.map(
-    (y) => region.morbidity[y]?.[disease]?.per_100000 ?? null
+  // Memoised so forecastData doesn't recompute on unrelated renders
+  const regionPoints = useMemo(
+    () => years.map((y) => region.morbidity[y]?.[disease]?.per_100000 ?? null),
+    [years, region.code, disease]
   );
-  const rfPoints = years.map(
-    (y) => data.rf.morbidity[y]?.[disease]?.per_100000 ?? null
+  const rfPoints = useMemo(
+    () => years.map((y) => data.rf.morbidity[y]?.[disease]?.per_100000 ?? null),
+    [years, disease]
   );
 
-  // Forecast computation
+  // Forecast — bestMethod called only once to avoid double computation
   const forecastData = useMemo(() => {
     if (forecastMode === "none") return null;
     const clean = regionPoints.filter((v): v is number => v != null);
     if (clean.length < 2) return null;
-    const method = forecastMode === "best" ? forecastMode : forecastMode;
-    const values = computeForecast(clean, method);
-    const resolvedKey = forecastMode === "best" ? bestMethod(clean) : forecastMode;
+
+    const resolvedKey: ForecastKey =
+      forecastMode === "best" ? bestMethod(clean) : forecastMode;
+    const values = computeForecast(clean, resolvedKey);
     const label = forecastMode === "best"
-      ? `Прогноз (${METHOD_LABELS[resolvedKey]})`
-      : `Прогноз ${METHOD_LABELS[forecastMode as ForecastKey]}`;
-    return { values, label };
+      ? `Прогноз · ${METHOD_LABELS[resolvedKey]}`
+      : `Прогноз · ${METHOD_LABELS[resolvedKey]}`;
+    return { values, label, resolvedKey };
   }, [forecastMode, regionPoints]);
 
-  // Build extended labels and series
+  const histLen  = years.length;
   const extLabels = forecastMode !== "none" ? [...years, ...FORECAST_LABELS] : years;
-  const histLen = years.length;
-  const extLen = extLabels.length;
+  const extLen    = extLabels.length;
 
   const regionExt: (number | null)[] = forecastMode !== "none"
     ? [...regionPoints, ...Array(FORECAST_PERIODS).fill(null)]
@@ -108,28 +137,21 @@ export default function RegionDataPanel({
     : rfPoints;
 
   const series: Series[] = [
-    { label: region.name, color: "#38bdf8", points: regionExt },
+    { label: region.name,      color: "#38bdf8", points: regionExt },
     { label: "РФ (в среднем)", color: "#f59e0b", points: rfExt },
   ];
 
   if (forecastData) {
-    // Connect forecast to last historical point
-    const lastHistIdx = regionPoints.reduceRight((found, v, i) =>
-      found === -1 && v != null ? i : found, -1);
+    const lastHistIdx = regionPoints.reduceRight(
+      (found, v, i) => (found === -1 && v != null ? i : found), -1
+    );
     const lastHistVal = lastHistIdx >= 0 ? regionPoints[lastHistIdx] : null;
 
     const forecastPts: (number | null)[] = Array(extLen).fill(null);
     if (lastHistVal != null) forecastPts[lastHistIdx] = lastHistVal;
-    forecastData.values.forEach((v, i) => {
-      forecastPts[histLen + i] = v;
-    });
+    forecastData.values.forEach((v, i) => { forecastPts[histLen + i] = v; });
 
-    series.push({
-      label: forecastData.label,
-      color: "#a78bfa",
-      points: forecastPts,
-      dashed: true,
-    });
+    series.push({ label: forecastData.label, color: "#a78bfa", points: forecastPts, dashed: true });
   }
 
   return (
@@ -148,15 +170,16 @@ export default function RegionDataPanel({
         <table className="dtable">
           <tbody>
             {diseases.map((d) => {
-              const v = mYear[d.key];
+              const v     = mYear[d.key];
               const vPrev = mPrev?.[d.key];
-              const pct = trendPct(v?.per_100000, vPrev?.per_100000);
               return (
                 <tr key={d.key} className={d.key === disease ? "row-on" : undefined}>
                   <td>{d.label}</td>
                   <td className="num">{fmt(v?.per_100000)}</td>
                   <td className="num muted">{fmt(v?.absolute_numbers)}</td>
-                  <td className="num"><TrendBadge pct={pct} /></td>
+                  <td className="num">
+                    <TrendBadge pct={trendPct(v?.per_100000, vPrev?.per_100000)} />
+                  </td>
                 </tr>
               );
             })}
@@ -171,17 +194,24 @@ export default function RegionDataPanel({
           <h3>Динамика · {diseaseLabel}</h3>
         </div>
 
-        {/* Forecast method pills */}
         <div className="forecast-pills">
-          {FORECAST_BUTTONS.map(({ key, label }) => (
-            <button
-              key={key}
-              className={"forecast-pill" + (forecastMode === key ? " on" : "")}
-              onClick={() => setForecastMode(key)}
-            >
-              {label}
-            </button>
-          ))}
+          {FORECAST_BUTTONS.map(({ key, label }) => {
+            const isActive = forecastMode === key;
+            // Show resolved method name on the active "best" pill
+            const displayLabel =
+              isActive && key === "best" && forecastData
+                ? `★ ${METHOD_LABELS[forecastData.resolvedKey]}`
+                : label;
+            return (
+              <button
+                key={key}
+                className={"forecast-pill" + (isActive ? " on" : "")}
+                onClick={() => setForecastMode(key)}
+              >
+                {displayLabel}
+              </button>
+            );
+          })}
         </div>
 
         <LineChart
@@ -192,36 +222,50 @@ export default function RegionDataPanel({
         />
       </div>
 
-      {/* ── Context metrics ── */}
+      {/* ── Context metrics — all available fields ── */}
       <div className="card">
         <div className="card-header">
           <h3>Контекст · {year}</h3>
         </div>
-        <div className="grid2">
-          <div className="metric">
-            <div className="k">Родившихся</div>
-            <div className="v">{fmt(births)}</div>
-            <TrendBadge pct={trendPct(births, birthsPrev)} invert />
-          </div>
-          <div className="metric">
-            <div className="k">Безопасная вода, %</div>
-            <div className="v">{fmt(water?.safe_water_pct)}</div>
-            <TrendBadge
-              pct={trendPct(water?.safe_water_pct, waterPrev?.safe_water_pct)}
+
+        <div className="ctx-section">
+          <div className="ctx-label">Демография</div>
+          <div className="grid2">
+            <CtxMetric
+              label="Родившихся"
+              value={births}
+              pct={trendPct(births, birthsPrev)}
               invert
+              full
             />
           </div>
-          <div className="metric">
-            <div className="k">Хим. нарушения воды, %</div>
-            <div className="v">{fmt(water?.chem_violation_pct)}</div>
-            <TrendBadge
-              pct={trendPct(water?.chem_violation_pct, waterPrev?.chem_violation_pct)}
-            />
+        </div>
+
+        <div className="ctx-section">
+          <div className="ctx-label">Качество воды</div>
+          <div className="grid2">
+            <CtxMetric label="Безопасная вода, %" value={water?.safe_water_pct}
+              pct={trendPct(water?.safe_water_pct, waterPrev?.safe_water_pct)} invert />
+            <CtxMetric label="Хим. нарушения, %" value={water?.chem_violation_pct}
+              pct={trendPct(water?.chem_violation_pct, waterPrev?.chem_violation_pct)} />
+            <CtxMetric label="Микробиол. нарушения, %" value={water?.micro_violation_pct}
+              pct={trendPct(water?.micro_violation_pct, waterPrev?.micro_violation_pct)} />
+            <CtxMetric label="Водопроводы (несоотв.), %" value={water?.pipe_violation_pct}
+              pct={trendPct(water?.pipe_violation_pct, waterPrev?.pipe_violation_pct)} />
           </div>
-          <div className="metric">
-            <div className="k">Выбросы, кт</div>
-            <div className="v">{fmt(em?.total_kt)}</div>
-            <TrendBadge pct={trendPct(em?.total_kt, emPrev?.total_kt)} />
+        </div>
+
+        <div className="ctx-section">
+          <div className="ctx-label">Выбросы</div>
+          <div className="grid2">
+            <CtxMetric label="Всего, кт" value={em?.total_kt}
+              pct={trendPct(em?.total_kt, emPrev?.total_kt)} />
+            <CtxMetric label="На душу, кг" value={em?.per_capita_kg}
+              pct={trendPct(em?.per_capita_kg, emPrev?.per_capita_kg)} />
+            <CtxMetric label="Стационарные, кт" value={em?.stationary_kt}
+              pct={trendPct(em?.stationary_kt, emPrev?.stationary_kt)} />
+            <CtxMetric label="Передвижные, кт" value={em?.mobile_kt}
+              pct={trendPct(em?.mobile_kt, emPrev?.mobile_kt)} />
           </div>
         </div>
       </div>
