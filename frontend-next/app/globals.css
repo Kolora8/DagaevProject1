@@ -58,7 +58,7 @@ body {
 
 .wrap {
   display: grid;
-  grid-template-columns: 1fr 400px;
+  grid-template-columns: 1fr 460px;
   height: calc(100vh - 62px);
 }
 
@@ -295,6 +295,56 @@ header .sub {
 .leaflet-control-zoom a:hover { background: var(--panel3) !important; }
 
 /* ============================================================
+   SUMMARY STATS BAR
+   ============================================================ */
+
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.stat-item {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+
+.stat-k {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-v {
+  font-size: 17px;
+  font-weight: 700;
+  font-family: var(--font-mono, 'DM Mono', monospace);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stat-region {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
    SIDEBAR
    ============================================================ */
 
@@ -312,6 +362,83 @@ aside::-webkit-scrollbar-track { background: transparent; }
 aside::-webkit-scrollbar-thumb {
   background: var(--line2);
   border-radius: 2px;
+}
+
+/* ---- Regional Ranking ---- */
+
+.ranking {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ranking-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 3px;
+}
+
+.ranking-hint {
+  font-size: 11px;
+  color: var(--muted2);
+  margin-bottom: 12px;
+}
+
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line2) transparent;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.rank-row:hover {
+  background: var(--panel2);
+  border-color: var(--line);
+}
+
+.rank-pos {
+  font-family: var(--font-mono, 'DM Mono', monospace);
+  font-size: 10px;
+  color: var(--muted2);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rank-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.rank-val {
+  font-family: var(--font-mono, 'DM Mono', monospace);
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ---- Empty State ---- */
@@ -822,4 +949,313 @@ button.ghost:hover {
   border-radius: 4px;
   font-family: var(--font-mono, 'DM Mono', monospace);
   font-size: 11px;
+}
+
+/* ============================================================
+   IDLE / LOADING ANIMATION
+   ============================================================ */
+
+/* ---- Keyframes ---- */
+
+@keyframes idle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes idle-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%       { opacity: 0.1; transform: scale(1.07); }
+}
+
+@keyframes idle-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes idle-ping-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+@keyframes idle-ping-expand {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(6.5); opacity: 0; }
+}
+
+@keyframes idle-mag-scan {
+  0%, 100% { transform: translate(-64px, -12px) rotate(-22deg); }
+  50%       { transform: translate( 56px,  18px) rotate( 16deg); }
+}
+
+@keyframes idle-dot-blink {
+  0%, 20%  { opacity: 0; }
+  50%, 80% { opacity: 1; }
+  100%     { opacity: 0; }
+}
+
+@keyframes idle-text-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes idle-overlay-out {
+  to { opacity: 0; pointer-events: none; }
+}
+
+/* ---- Overlay container ---- */
+
+.idle-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.idle-overlay--out {
+  animation: idle-overlay-out 0.65s ease forwards;
+}
+
+.idle-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+/* ---- Globe wrap ---- */
+
+.idle-globe-wrap {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+/* Outer pulse rings */
+.idle-pulse-ring {
+  transform-origin: 100px 100px;
+  animation: idle-pulse 2.8s ease-in-out infinite;
+}
+
+.idle-pulse-ring--slow {
+  animation-delay: -1.4s;
+  animation-duration: 3.8s;
+}
+
+/* Globe outline: draw-in */
+.idle-globe-outline {
+  stroke-dasharray: 455;
+  stroke-dashoffset: 455;
+  animation: idle-draw 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s forwards;
+}
+
+/* Latitude lines — staggered draw-in */
+.idle-lat-0 { stroke-dasharray: 330; stroke-dashoffset: 330;
+  animation: idle-draw 0.9s ease 0.4s forwards; }
+.idle-lat-1 { stroke-dasharray: 285; stroke-dashoffset: 285;
+  animation: idle-draw 0.85s ease 0.6s forwards; }
+.idle-lat-2 { stroke-dasharray: 190; stroke-dashoffset: 190;
+  animation: idle-draw 0.75s ease 0.8s forwards; }
+.idle-lat-3 { stroke-dasharray: 285; stroke-dashoffset: 285;
+  animation: idle-draw 0.85s ease 0.55s forwards; }
+
+/* Longitude — static draw-in */
+.idle-lon-0 { stroke-dasharray: 330; stroke-dashoffset: 330;
+  animation: idle-draw 0.9s ease 0.72s forwards; }
+
+/* Longitude — slow spin (starts after draw phase ends) */
+.idle-lon-spin {
+  transform-origin: 100px 100px;
+  animation: idle-spin 10s linear 1.5s infinite;
+}
+
+/* Ping dots */
+.idle-ping-0 { animation: idle-ping-pulse 2.4s ease-in-out 1.3s infinite; }
+.idle-ping-1 { animation: idle-ping-pulse 2.4s ease-in-out 2.0s infinite; }
+.idle-ping-2 { animation: idle-ping-pulse 2.4s ease-in-out 2.7s infinite; }
+
+/* Ping expand rings */
+.idle-ping-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.idle-ping-ring-0 { animation: idle-ping-expand 2.4s ease-out 1.3s infinite; }
+.idle-ping-ring-1 { animation: idle-ping-expand 2.4s ease-out 2.0s infinite; }
+.idle-ping-ring-2 { animation: idle-ping-expand 2.4s ease-out 2.7s infinite; }
+
+/* ---- Magnifying glass ---- */
+
+/* Centered at globe origin; transform-only animation so left/top stay fixed */
+.idle-mag-wrap {
+  position: absolute;
+  left: calc(50% - 20px);
+  top: calc(50% - 22px);
+  width: 40px;
+  height: 44px;
+  pointer-events: none;
+  animation-name: idle-mag-scan;
+  animation-duration: 4.2s;
+  animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  animation-delay: 1.5s;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both; /* backwards fill → starts at scan-left position */
+}
+
+/* ---- Text below globe ---- */
+
+.idle-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: idle-text-in 0.7s ease 0.9s both;
+}
+
+.idle-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.idle-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.idle-ellipsis {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 2px;
+}
+
+.idle-ellipsis span {
+  opacity: 0;
+  animation: idle-dot-blink 1.5s ease-in-out infinite;
+}
+.idle-ellipsis span:nth-child(2) { animation-delay: 0.3s; }
+.idle-ellipsis span:nth-child(3) { animation-delay: 0.6s; }
+
+/* ---- Globe SVG dim transition ---- */
+
+.idle-globe-svg {
+  display: block;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+.idle-globe-svg--dimmed {
+  opacity: 0.18;
+  filter: saturate(0.3);
+}
+
+/* ---- Result badge ---- */
+
+@keyframes idle-result-appear {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.65); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes idle-result-draw-circle {
+  to { stroke-dashoffset: 0; }
+}
+
+.idle-result-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  animation: idle-result-appear 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Circle outline draws in */
+.idle-result-circle {
+  stroke-dasharray: 210;
+  stroke-dashoffset: 210;
+  animation: idle-result-draw-circle 0.4s ease 0.05s forwards;
+}
+
+/* Checkmark draws in after circle */
+.idle-result-check {
+  stroke-dasharray: 58;
+  stroke-dashoffset: 58;
+  animation: idle-result-draw-circle 0.35s ease 0.3s forwards;
+}
+
+/* X lines draw in (staggered) */
+.idle-result-x1 {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: idle-result-draw-circle 0.25s ease 0.25s forwards;
+}
+
+.idle-result-x2 {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: idle-result-draw-circle 0.25s ease 0.42s forwards;
+}
+
+/* ---- Result text variants ---- */
+
+.idle-title--ok    { color: #34d399; }
+.idle-title--error { color: #f43f5e; }
+
+.idle-result-sub {
+  color: var(--muted2);
+  font-size: 12px;
+}
+
+/* ---- Dismiss button (inside overlay) ---- */
+
+.idle-dismiss-btn {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--line2);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 8px 24px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.idle-dismiss-btn:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* ---- "Check data" button in header ---- */
+
+.header-check-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  background: transparent;
+  border: 1px solid var(--line2);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 500;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.header-check-btn:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: var(--ink);
+  background: var(--accent-dim);
+}
+
+.header-check-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

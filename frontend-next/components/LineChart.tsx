@@ -11,18 +11,21 @@ export interface Series {
 export default function LineChart({
   labels,
   series,
-  height = 180,
+  height = 220,
 }: {
   labels: string[];
   series: Series[];
   height?: number;
 }) {
-  const W = 480;
+  // ViewBox matches the container closely:
+  // aside=460px, aside-padding=20×2=40, card-padding=16×2=32 → ~388px rendered.
+  // W=400 gives scale ≈ 0.97 — nearly 1:1, so font/dot sizes are accurate.
+  const W = 400;
   const H = height;
   const padL = 46;
-  const padB = 24;
-  const padT = 12;
-  const padR = 10;
+  const padB = 26;
+  const padT = 14;
+  const padR = 12;
 
   const [hover, setHover] = useState<{ si: number; pi: number } | null>(null);
 
@@ -31,8 +34,11 @@ export default function LineChart({
   );
   const rawMin = all.length ? Math.min(...all) : 0;
   const rawMax = all.length ? Math.max(...all) : 1;
-  const lo = rawMin === rawMax ? rawMin - 1 : rawMin;
-  const hi = rawMin === rawMax ? rawMax + 1 : rawMax;
+  const rawRange = rawMax - rawMin || 2;
+
+  // Add 8% padding above and below so lines never touch the chart edges.
+  const lo = rawMin - rawRange * 0.08;
+  const hi = rawMax + rawRange * 0.08;
   const range = hi - lo;
 
   const x = (i: number) =>
@@ -64,12 +70,18 @@ export default function LineChart({
     return d;
   };
 
-  const yticks = [0, 0.5, 1].map((t) => lo + range * t);
+  // 4 evenly spaced ticks on the Y axis.
+  const yticks = [0, 1 / 3, 2 / 3, 1].map((t) => lo + range * t);
+
   const fmt = (n: number) =>
     n >= 1000 ? Math.round(n).toLocaleString("ru-RU") : Math.round(n * 10) / 10;
 
   const hoverVal =
     hover != null ? (series[hover.si]?.points[hover.pi] ?? null) : null;
+
+  const monoStyle: React.CSSProperties = {
+    fontFamily: "var(--font-mono, 'DM Mono', monospace)",
+  };
 
   return (
     <div className="linechart-wrap">
@@ -90,13 +102,13 @@ export default function LineChart({
               y2={H - padB}
               gradientUnits="userSpaceOnUse"
             >
-              <stop offset="0%" stopColor={s.color} stopOpacity="0.28" />
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.25" />
               <stop offset="100%" stopColor={s.color} stopOpacity="0.02" />
             </linearGradient>
           ))}
         </defs>
 
-        {/* Horizontal gridlines */}
+        {/* Horizontal gridlines + Y labels */}
         {yticks.map((v, i) => (
           <g key={i}>
             <line
@@ -104,43 +116,35 @@ export default function LineChart({
               x2={W - padR}
               y1={y(v)}
               y2={y(v)}
-              strokeWidth="1"
-              strokeDasharray="3 4"
-              style={{ stroke: "#1e3054" }}
+              strokeWidth="0.8"
+              strokeDasharray="3 5"
+              style={{ stroke: "#243862" }}
             />
             <text
-              x={padL - 5}
-              y={y(v) + 3.5}
-              fontSize="9"
+              x={padL - 6}
+              y={y(v) + 4}
+              fontSize="11"
               textAnchor="end"
-              style={{
-                fill: "#4a6690",
-                fontFamily: "var(--font-mono, 'DM Mono', monospace)",
-              }}
+              style={{ fill: "#7b9dc8", ...monoStyle }}
             >
               {fmt(v)}
             </text>
           </g>
         ))}
 
-        {/* X-axis labels */}
-        {labels.map((l, i) =>
-          i % 2 === 0 || i === labels.length - 1 ? (
-            <text
-              key={l}
-              x={x(i)}
-              y={H - 6}
-              fontSize="9"
-              textAnchor="middle"
-              style={{
-                fill: "#4a6690",
-                fontFamily: "var(--font-mono, 'DM Mono', monospace)",
-              }}
-            >
-              {l}
-            </text>
-          ) : null
-        )}
+        {/* X-axis labels — every year since there are only ~9 */}
+        {labels.map((l, i) => (
+          <text
+            key={l}
+            x={x(i)}
+            y={H - 7}
+            fontSize="10"
+            textAnchor="middle"
+            style={{ fill: "#7b9dc8", ...monoStyle }}
+          >
+            {l}
+          </text>
+        ))}
 
         {/* Area fills */}
         {series.map((s, si) => (
@@ -158,7 +162,7 @@ export default function LineChart({
             d={linePath(s.points)}
             fill="none"
             stroke={s.color}
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeLinejoin="round"
             strokeLinecap="round"
           />
@@ -172,9 +176,9 @@ export default function LineChart({
                 key={`dot-${si}-${pi}`}
                 cx={x(pi)}
                 cy={y(p)}
-                r={3}
+                r={4}
                 fill={s.color}
-                strokeWidth="1.5"
+                strokeWidth="2"
                 className="chart-dot"
                 style={{ stroke: "#0f1826" }}
                 onMouseEnter={() => setHover({ si, pi })}
@@ -191,29 +195,26 @@ export default function LineChart({
             const cx = x(hover.pi);
             const cy = y(hoverVal);
             const text = `${labels[hover.pi]}: ${fmt(hoverVal)}`;
-            const tw = text.length * 5.6 + 18;
+            const tw = text.length * 6.2 + 20;
             const tx = Math.max(padL, Math.min(W - padR - tw, cx - tw / 2));
-            const ty = cy > padT + 32 ? cy - 30 : cy + 10;
+            const ty = cy > padT + 36 ? cy - 32 : cy + 12;
             return (
               <g style={{ pointerEvents: "none" }}>
                 <rect
                   x={tx}
                   y={ty}
                   width={tw}
-                  height={19}
+                  height={20}
                   rx="4"
                   strokeWidth="1"
-                  style={{ fill: "#1a2d4a", stroke: "#243862" }}
+                  style={{ fill: "#1a2d4a", stroke: "#38bdf8" }}
                 />
                 <text
                   x={tx + tw / 2}
-                  y={ty + 12.5}
-                  fontSize="9"
+                  y={ty + 13.5}
+                  fontSize="10"
                   textAnchor="middle"
-                  style={{
-                    fill: "#e2ecff",
-                    fontFamily: "var(--font-mono, 'DM Mono', monospace)",
-                  }}
+                  style={{ fill: "#e2ecff", ...monoStyle }}
                 >
                   {text}
                 </text>
