@@ -11,13 +11,17 @@ const MODE_LABELS: Record<MapMode, string> = {
 };
 
 const WATER_KEYS = [
-  { key: "safe_water_pct",     label: "Безопасная вода" },
-  { key: "chem_violation_pct", label: "Хим. загрязнения" },
+  { key: "safe_water_pct",      label: "Безопасная вода" },
+  { key: "chem_violation_pct",  label: "Хим. загрязнения" },
+  { key: "micro_violation_pct", label: "Микробиол. нарушения" },
+  { key: "pipe_violation_pct",  label: "Водопроводы (несоотв.)" },
 ];
 
 const EMISSIONS_KEYS = [
   { key: "total_kt",      label: "Всего, кт" },
   { key: "per_capita_kg", label: "На душу, кг" },
+  { key: "stationary_kt", label: "Стационарные" },
+  { key: "mobile_kt",     label: "Передвижные" },
 ];
 
 export default function MapControls({

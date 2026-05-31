@@ -8,6 +8,7 @@ import MapControls, { type MapMode } from "@/components/MapControls";
 import RegionDataPanel from "@/components/RegionDataPanel";
 import SummaryStats from "@/components/SummaryStats";
 import RegionRanking from "@/components/RegionRanking";
+import ComparePanel from "@/components/ComparePanel";
 import LoadingScreen, { type CheckState } from "@/components/LoadingScreen";
 
 const RussiaLeafletMap = dynamic(() => import("@/components/RussiaLeafletMap"), {
@@ -15,17 +16,23 @@ const RussiaLeafletMap = dynamic(() => import("@/components/RussiaLeafletMap"), 
   loading: () => <div className="skeleton skeleton-map" />,
 });
 
+const MAX_COMPARE = 6;
+
 export default function Page() {
-  const [data, setData] = useState<Dataset | null>(null);
-  const [year, setYear] = useState("2023");
-  const [disease, setDisease] = useState("congenital_anomalies");
+  const [data, setData]             = useState<Dataset | null>(null);
+  const [year, setYear]             = useState("2023");
+  const [disease, setDisease]       = useState("congenital_anomalies");
   const [activeCode, setActiveCode] = useState<string | null>(null);
   const [checkState, setCheckState] = useState<CheckState | undefined>(undefined);
 
   // Map data layer
-  const [mapMode, setMapMode] = useState<MapMode>("morbidity");
-  const [waterKey, setWaterKey] = useState("safe_water_pct");
+  const [mapMode, setMapMode]         = useState<MapMode>("morbidity");
+  const [waterKey, setWaterKey]       = useState("safe_water_pct");
   const [emissionsKey, setEmissionsKey] = useState("total_kt");
+
+  // Compare mode
+  const [compareMode, setCompareMode]   = useState(false);
+  const [compareCodes, setCompareCodes] = useState<string[]>([]);
 
   useEffect(() => {
     loadDataset()
@@ -37,28 +44,40 @@ export default function Page() {
       .catch(() => setData(null));
   }, []);
 
-  // Generic value extractor — changes with mapMode and sub-key selectors
-  const getRegionValue = useCallback(
-    (r: RegionData | undefined): number | null => {
-      if (!r) return null;
+  // Base value extractor that accepts year explicitly — used for time-series in ComparePanel
+  const getSeriesValue = useCallback(
+    (r: RegionData, y: string): number | null => {
       switch (mapMode) {
         case "morbidity":
-          return per100k(r, disease, year);
+          return per100k(r, disease, y);
         case "water": {
-          const w = r.water_quality[year];
+          const w = r.water_quality[y];
           if (!w) return null;
-          return waterKey === "safe_water_pct"
-            ? w.safe_water_pct
-            : w.chem_violation_pct;
+          if (waterKey === "safe_water_pct")      return w.safe_water_pct;
+          if (waterKey === "chem_violation_pct")  return w.chem_violation_pct;
+          if (waterKey === "micro_violation_pct") return w.micro_violation_pct;
+          if (waterKey === "pipe_violation_pct")  return w.pipe_violation_pct;
+          return null;
         }
         case "emissions": {
-          const e = r.emissions[year];
+          const e = r.emissions[y];
           if (!e) return null;
-          return emissionsKey === "total_kt" ? e.total_kt : e.per_capita_kg;
+          if (emissionsKey === "total_kt")      return e.total_kt;
+          if (emissionsKey === "per_capita_kg") return e.per_capita_kg;
+          if (emissionsKey === "stationary_kt") return e.stationary_kt;
+          if (emissionsKey === "mobile_kt")     return e.mobile_kt;
+          return null;
         }
       }
     },
-    [mapMode, disease, year, waterKey, emissionsKey]
+    [mapMode, disease, waterKey, emissionsKey]
+  );
+
+  // Single-year value for map coloring / stats bar / ranking
+  const getRegionValue = useCallback(
+    (r: RegionData | undefined): number | null =>
+      r ? getSeriesValue(r, year) : null,
+    [getSeriesValue, year]
   );
 
   const domain = useMemo<[number, number]>(() => {
@@ -66,18 +85,36 @@ export default function Page() {
     return computeDomain(data.regions.map((r) => getRegionValue(r)));
   }, [data, getRegionValue]);
 
-  // For safe water %: higher = better = blue, so invert the color scale
-  const invertColors = mapMode === "water" && waterKey === "safe_water_pct";
+  // safe_water_pct and pipe_violation_pct (compliant %) → higher is better → invert color scale
+  const invertColors =
+    mapMode === "water" &&
+    (waterKey === "safe_water_pct" || waterKey === "pipe_violation_pct");
+
+  // Absolute-number getter for the morbidity ranking column toggle
+  const getAbsoluteValue = useMemo(() => {
+    if (mapMode !== "morbidity") return undefined;
+    return (r: RegionData | undefined): number | null =>
+      r?.morbidity[year]?.[disease]?.absolute_numbers ?? null;
+  }, [mapMode, year, disease]);
 
   const legendUnit = useMemo(() => {
     if (mapMode === "morbidity") return `На 100 тыс. населения · ${year}`;
-    if (mapMode === "water")
-      return waterKey === "safe_water_pct"
-        ? `% безопасной воды · ${year}`
-        : `% хим. нарушений · ${year}`;
-    return emissionsKey === "total_kt"
-      ? `Выбросы, кт · ${year}`
-      : `Выбросы на душу, кг · ${year}`;
+    if (mapMode === "water") {
+      const waterLabels: Record<string, string> = {
+        safe_water_pct:      `% безопасной воды · ${year}`,
+        chem_violation_pct:  `% хим. нарушений · ${year}`,
+        micro_violation_pct: `% микробиол. нарушений · ${year}`,
+        pipe_violation_pct:  `% несоотв. водопроводов · ${year}`,
+      };
+      return waterLabels[waterKey] ?? `% · ${year}`;
+    }
+    const emissionsLabels: Record<string, string> = {
+      total_kt:      `Выбросы всего, кт · ${year}`,
+      per_capita_kg: `Выбросы на душу, кг · ${year}`,
+      stationary_kt: `Стационарные выбросы, кт · ${year}`,
+      mobile_kt:     `Передвижные выбросы, кт · ${year}`,
+    };
+    return emissionsLabels[emissionsKey] ?? `Выбросы · ${year}`;
   }, [mapMode, waterKey, emissionsKey, year]);
 
   const formatValue = useCallback(
@@ -86,17 +123,37 @@ export default function Page() {
       if (mapMode === "morbidity")
         return v.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
       if (mapMode === "water") return `${v.toFixed(1)}%`;
-      return emissionsKey === "total_kt"
-        ? `${Math.round(v).toLocaleString("ru-RU")} кт`
-        : `${Math.round(v).toLocaleString("ru-RU")} кг`;
+      return emissionsKey === "per_capita_kg"
+        ? `${Math.round(v).toLocaleString("ru-RU")} кг`
+        : `${Math.round(v).toLocaleString("ru-RU")} кт`;
     },
     [mapMode, emissionsKey]
   );
 
-  // Used as the GeoJSON re-render key inside RussiaLeafletMap
-  const valKey = `${mapMode}-${disease}-${year}-${waterKey}-${emissionsKey}`;
+  // GeoJSON key — includes compare set so the layer re-renders when selection changes
+  const valKey = compareMode
+    ? `cmp-${compareCodes.slice().sort().join(",")}-${mapMode}-${year}-${waterKey}-${emissionsKey}`
+    : `${mapMode}-${disease}-${year}-${waterKey}-${emissionsKey}`;
 
   const onSelect = useCallback((code: string) => setActiveCode(code), []);
+
+  const onCompareToggle = useCallback((code: string) => {
+    setCompareCodes((prev) => {
+      if (prev.includes(code)) return prev.filter((c) => c !== code);
+      if (prev.length >= MAX_COMPARE) return prev;
+      return [...prev, code];
+    });
+  }, []);
+
+  function enterCompareMode() {
+    setCompareMode(true);
+    setActiveCode(null);
+  }
+
+  function exitCompareMode() {
+    setCompareMode(false);
+    setCompareCodes([]);
+  }
 
   const active: RegionData | undefined = data?.regions.find(
     (r) => r.code === activeCode
@@ -104,7 +161,6 @@ export default function Page() {
 
   async function handleCheck() {
     setCheckState("checking");
-    // Enforce 2.5s minimum so the animation is always visible
     await Promise.all([
       fetch("/morbidity.json").then((r) => {
         if (!r.ok) throw new Error("not ok");
@@ -186,6 +242,44 @@ export default function Page() {
                 legendUnit={legendUnit}
                 invertColors={invertColors}
               />
+
+              {/* ── Compare mode bar ── */}
+              <div className="compare-bar">
+                {!compareMode ? (
+                  <button className="compare-enter-btn" onClick={enterCompareMode}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <rect x="1" y="2" width="5" height="10" rx="1.5"
+                        stroke="currentColor" strokeWidth="1.4" />
+                      <rect x="8" y="2" width="5" height="10" rx="1.5"
+                        stroke="currentColor" strokeWidth="1.4" />
+                    </svg>
+                    Сравнить регионы
+                  </button>
+                ) : (
+                  <div className="compare-bar-active">
+                    <span className="compare-bar-info">
+                      <span className="compare-bar-dot" />
+                      Режим сравнения
+                      {compareCodes.length > 0 && (
+                        <span className="compare-bar-badge">
+                          {compareCodes.length}/{MAX_COMPARE}
+                        </span>
+                      )}
+                    </span>
+                    <span className="compare-bar-hint">
+                      {compareCodes.length === 0
+                        ? "Нажмите на регионы на карте"
+                        : compareCodes.length === 1
+                        ? "Выберите ещё один регион"
+                        : "Нажмите на регион чтобы добавить или убрать"}
+                    </span>
+                    <button className="compare-exit-btn" onClick={exitCompareMode}>
+                      Выйти
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <SummaryStats
                 regions={data.regions}
                 getRegionValue={getRegionValue}
@@ -200,6 +294,9 @@ export default function Page() {
                 domain={domain}
                 activeCode={activeCode}
                 onSelect={onSelect}
+                compareMode={compareMode}
+                compareCodes={compareCodes}
+                onCompareToggle={onCompareToggle}
               />
             </>
           ) : (
@@ -208,7 +305,21 @@ export default function Page() {
         </div>
 
         <aside>
-          {data && active ? (
+          {compareMode && data ? (
+            <ComparePanel
+              compareCodes={compareCodes}
+              data={data}
+              getSeriesValue={getSeriesValue}
+              formatValue={formatValue}
+              legendUnit={legendUnit}
+              year={year}
+              onRemove={(code) =>
+                setCompareCodes((prev) => prev.filter((c) => c !== code))
+              }
+              onClear={() => setCompareCodes([])}
+              onClose={exitCompareMode}
+            />
+          ) : data && active ? (
             <RegionDataPanel
               region={active}
               data={data}
@@ -219,6 +330,7 @@ export default function Page() {
             <RegionRanking
               regions={data.regions}
               getRegionValue={getRegionValue}
+              getAbsoluteValue={getAbsoluteValue}
               formatValue={formatValue}
               invertSort={invertColors}
               onSelect={onSelect}
