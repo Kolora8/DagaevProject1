@@ -26,15 +26,22 @@ export default function MapControls({
   return (
     <div className="controls">
       <div className="ctl-row">
-        <label className="ctl-label">Год</label>
-        <select value={year} onChange={(e) => onYear(e.target.value)}>
+        <span className="ctl-label">Год</span>
+        <div className="pills">
           {years.map((y) => (
-            <option key={y} value={y}>
+            <button
+              key={y}
+              className={"pill" + (y === year ? " on" : "")}
+              onClick={() => onYear(y)}
+            >
               {y}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
+      </div>
 
+      <div className="ctl-row">
+        <span className="ctl-label">Показатель</span>
         <div className="pills">
           {diseases.map((d) => (
             <button
@@ -49,7 +56,7 @@ export default function MapControls({
       </div>
 
       <div className="legend-bar">
-        <span className="legend-cap">Заболеваемость на 100 тыс., {year}</span>
+        <span className="legend-cap">На 100 тыс. населения · {year}</span>
         <div className="legend-grad" />
         <div className="legend-ticks">
           {stops.map((s) => (

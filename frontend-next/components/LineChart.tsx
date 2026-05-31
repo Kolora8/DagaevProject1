@@ -1,6 +1,7 @@
 "use client";
 
-// Простой линейный график на SVG, без внешних зависимостей.
+import { useState } from "react";
+
 export interface Series {
   label: string;
   color: string;
@@ -16,27 +17,30 @@ export default function LineChart({
   series: Series[];
   height?: number;
 }) {
-  const W = 460;
+  const W = 480;
   const H = height;
   const padL = 46;
-  const padB = 22;
-  const padT = 10;
+  const padB = 24;
+  const padT = 12;
   const padR = 10;
+
+  const [hover, setHover] = useState<{ si: number; pi: number } | null>(null);
 
   const all = series.flatMap((s) =>
     s.points.filter((p): p is number => p != null)
   );
-  const min = all.length ? Math.min(...all) : 0;
-  const max = all.length ? Math.max(...all) : 1;
-  const lo = min === max ? min - 1 : min;
-  const hi = min === max ? max + 1 : max;
+  const rawMin = all.length ? Math.min(...all) : 0;
+  const rawMax = all.length ? Math.max(...all) : 1;
+  const lo = rawMin === rawMax ? rawMin - 1 : rawMin;
+  const hi = rawMin === rawMax ? rawMax + 1 : rawMax;
+  const range = hi - lo;
 
   const x = (i: number) =>
     padL + (i * (W - padL - padR)) / Math.max(1, labels.length - 1);
   const y = (v: number) =>
-    padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo));
+    padT + (H - padT - padB) * (1 - (v - lo) / range);
 
-  const path = (pts: (number | null)[]) => {
+  const linePath = (pts: (number | null)[]) => {
     let d = "";
     pts.forEach((p, i) => {
       if (p == null) return;
@@ -45,13 +49,54 @@ export default function LineChart({
     return d;
   };
 
-  const yticks = [0, 0.5, 1].map((t) => lo + (hi - lo) * t);
+  const areaPath = (pts: (number | null)[]) => {
+    const valid = pts
+      .map((p, i) => (p != null ? { v: p, i } : null))
+      .filter(Boolean) as { v: number; i: number }[];
+    if (!valid.length) return "";
+    let d = `M${x(valid[0].i).toFixed(1)},${y(valid[0].v).toFixed(1)}`;
+    for (let k = 1; k < valid.length; k++) {
+      d += ` L${x(valid[k].i).toFixed(1)},${y(valid[k].v).toFixed(1)}`;
+    }
+    const bottom = H - padB;
+    d += ` L${x(valid[valid.length - 1].i).toFixed(1)},${bottom}`;
+    d += ` L${x(valid[0].i).toFixed(1)},${bottom} Z`;
+    return d;
+  };
+
+  const yticks = [0, 0.5, 1].map((t) => lo + range * t);
   const fmt = (n: number) =>
     n >= 1000 ? Math.round(n).toLocaleString("ru-RU") : Math.round(n * 10) / 10;
 
+  const hoverVal =
+    hover != null ? (series[hover.si]?.points[hover.pi] ?? null) : null;
+
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="linechart" role="img">
+    <div className="linechart-wrap">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="linechart"
+        role="img"
+      >
+        <defs>
+          {series.map((s, si) => (
+            <linearGradient
+              key={si}
+              id={`area-grad-${si}`}
+              x1="0"
+              y1={padT}
+              x2="0"
+              y2={H - padB}
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0%" stopColor={s.color} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={s.color} stopOpacity="0.02" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {/* Horizontal gridlines */}
         {yticks.map((v, i) => (
           <g key={i}>
             <line
@@ -59,38 +104,124 @@ export default function LineChart({
               x2={W - padR}
               y1={y(v)}
               y2={y(v)}
-              stroke="#27395f"
-              strokeWidth="0.6"
+              strokeWidth="1"
+              strokeDasharray="3 4"
+              style={{ stroke: "#1e3054" }}
             />
-            <text x={4} y={y(v) + 3} fill="#9fb0d0" fontSize="9">
+            <text
+              x={padL - 5}
+              y={y(v) + 3.5}
+              fontSize="9"
+              textAnchor="end"
+              style={{
+                fill: "#4a6690",
+                fontFamily: "var(--font-mono, 'DM Mono', monospace)",
+              }}
+            >
               {fmt(v)}
             </text>
           </g>
         ))}
+
+        {/* X-axis labels */}
         {labels.map((l, i) =>
           i % 2 === 0 || i === labels.length - 1 ? (
             <text
               key={l}
               x={x(i)}
               y={H - 6}
-              fill="#9fb0d0"
               fontSize="9"
               textAnchor="middle"
+              style={{
+                fill: "#4a6690",
+                fontFamily: "var(--font-mono, 'DM Mono', monospace)",
+              }}
             >
               {l}
             </text>
           ) : null
         )}
-        {series.map((s) => (
+
+        {/* Area fills */}
+        {series.map((s, si) => (
           <path
-            key={s.label}
-            d={path(s.points)}
+            key={`area-${si}`}
+            d={areaPath(s.points)}
+            fill={`url(#area-grad-${si})`}
+          />
+        ))}
+
+        {/* Lines */}
+        {series.map((s, si) => (
+          <path
+            key={`line-${si}`}
+            d={linePath(s.points)}
             fill="none"
             stroke={s.color}
             strokeWidth="2"
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
         ))}
+
+        {/* Data point dots */}
+        {series.map((s, si) =>
+          s.points.map((p, pi) =>
+            p != null ? (
+              <circle
+                key={`dot-${si}-${pi}`}
+                cx={x(pi)}
+                cy={y(p)}
+                r={3}
+                fill={s.color}
+                strokeWidth="1.5"
+                className="chart-dot"
+                style={{ stroke: "#0f1826" }}
+                onMouseEnter={() => setHover({ si, pi })}
+                onMouseLeave={() => setHover(null)}
+              />
+            ) : null
+          )
+        )}
+
+        {/* Hover tooltip */}
+        {hover !== null &&
+          hoverVal !== null &&
+          (() => {
+            const cx = x(hover.pi);
+            const cy = y(hoverVal);
+            const text = `${labels[hover.pi]}: ${fmt(hoverVal)}`;
+            const tw = text.length * 5.6 + 18;
+            const tx = Math.max(padL, Math.min(W - padR - tw, cx - tw / 2));
+            const ty = cy > padT + 32 ? cy - 30 : cy + 10;
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                <rect
+                  x={tx}
+                  y={ty}
+                  width={tw}
+                  height={19}
+                  rx="4"
+                  strokeWidth="1"
+                  style={{ fill: "#1a2d4a", stroke: "#243862" }}
+                />
+                <text
+                  x={tx + tw / 2}
+                  y={ty + 12.5}
+                  fontSize="9"
+                  textAnchor="middle"
+                  style={{
+                    fill: "#e2ecff",
+                    fontFamily: "var(--font-mono, 'DM Mono', monospace)",
+                  }}
+                >
+                  {text}
+                </text>
+              </g>
+            );
+          })()}
       </svg>
+
       <div className="chart-legend">
         {series.map((s) => (
           <span key={s.label}>
