@@ -35,6 +35,9 @@ export default function RussiaLeafletMap({
   domain,
   activeCode,
   onSelect,
+  compareMode = false,
+  compareCodes = [],
+  onCompareToggle,
 }: {
   regions: RegionData[];
   getRegionValue: (r: RegionData | undefined) => number | null;
@@ -44,6 +47,9 @@ export default function RussiaLeafletMap({
   domain: [number, number];
   activeCode: string | null;
   onSelect: (code: string) => void;
+  compareMode?: boolean;
+  compareCodes?: string[];
+  onCompareToggle?: (code: string) => void;
 }) {
   const [geo, setGeo] = useState<FeatureCollection | null>(null);
   const [error, setError] = useState(false);
@@ -80,6 +86,17 @@ export default function RussiaLeafletMap({
     const name = (feature?.properties?.name as string) || "";
     const r = matchByName(name, regions);
     const value = getRegionValue(r);
+
+    if (compareMode) {
+      const inSet = !!r && compareCodes.includes(r.code);
+      return {
+        fillColor: colorFor(value, domain, invertColors),
+        color: inSet ? "#38bdf8" : "#0e1b33",
+        weight: inSet ? 2.5 : 0.4,
+        fillOpacity: r ? (inSet ? 0.95 : 0.38) : 0.15,
+      };
+    }
+
     const active = !!r && r.code === activeCode;
     return {
       fillColor: colorFor(value, domain, invertColors),
@@ -97,9 +114,13 @@ export default function RussiaLeafletMap({
       (r?.name || name) + (value != null ? `: ${formatValue(value)}` : "");
     layer.bindTooltip(label, { sticky: true });
     if (r) {
-      layer.on("click", () => onSelect(r.code));
-      if (r.code === activeCode)
-        (layer as unknown as { bringToFront: () => void }).bringToFront();
+      if (compareMode && onCompareToggle) {
+        layer.on("click", () => onCompareToggle(r.code));
+      } else {
+        layer.on("click", () => onSelect(r.code));
+        if (r.code === activeCode)
+          (layer as unknown as { bringToFront: () => void }).bringToFront();
+      }
     }
   };
 
