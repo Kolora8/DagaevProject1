@@ -3,7 +3,6 @@
 import { RegionData, Dataset } from "@/lib/dataset";
 import LineChart, { Series } from "./LineChart";
 
-// Up to 6 regions, each gets a distinct color
 const PALETTE = ["#38bdf8", "#f59e0b", "#34d399", "#f472b6", "#a78bfa", "#fb923c"];
 
 export default function ComparePanel({
@@ -39,7 +38,6 @@ export default function ComparePanel({
     points: years.map((y) => getSeriesValue(r, y)),
   }));
 
-  // Sort table rows by descending current-year value
   const tableRows = selectedRegions
     .map((r, i) => ({ r, i, v: getSeriesValue(r, year) }))
     .sort((a, b) => (b.v ?? -Infinity) - (a.v ?? -Infinity));
@@ -47,7 +45,6 @@ export default function ComparePanel({
   return (
     <div className="compare-panel">
 
-      {/* ── Header ── */}
       <div className="compare-header">
         <div className="compare-title">
           Сравнение
@@ -64,7 +61,6 @@ export default function ComparePanel({
       </div>
 
       {compareCodes.length === 0 ? (
-        /* ── Empty state ── */
         <div className="compare-empty">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
             <rect x="4" y="12" width="17" height="24" rx="3"
@@ -80,7 +76,6 @@ export default function ComparePanel({
         </div>
       ) : (
         <>
-          {/* ── Region chips ── */}
           <div className="compare-chips">
             {selectedRegions.map((r, i) => (
               <div
@@ -107,7 +102,6 @@ export default function ComparePanel({
             ))}
           </div>
 
-          {/* ── Trend chart (needs ≥ 2 regions) ── */}
           {compareCodes.length >= 2 && (
             <div className="compare-card">
               <div className="card-header">
@@ -118,7 +112,6 @@ export default function ComparePanel({
             </div>
           )}
 
-          {/* ── Comparison table — current year ── */}
           <div className="compare-card">
             <div className="card-header">
               <h3>Значения · {year}</h3>
@@ -146,7 +139,6 @@ export default function ComparePanel({
             </table>
           </div>
 
-          {/* ── Clear button ── */}
           <button className="compare-clear-btn" onClick={onClear}>
             Очистить выбор
           </button>

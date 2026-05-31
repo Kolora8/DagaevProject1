@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 export type CheckState = "checking" | "ok" | "error";
 
 interface Props {
-  visible: boolean;             // true = initial app load; drives auto-dismiss
-  checkState?: CheckState;      // set by user-triggered "Check data" button
-  onDismiss?: () => void;       // called when user closes the result screen
+  visible: boolean;
+  checkState?: CheckState;
+  onDismiss?: () => void;
 }
 
 export default function LoadingScreen({ visible, checkState, onDismiss }: Props) {
@@ -32,7 +32,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
     <div className={`idle-overlay${!active ? " idle-overlay--out" : ""}`}>
       <div className="idle-center">
 
-        {/* ── Globe + result badge ── */}
         <div className="idle-globe-wrap">
           <svg
             viewBox="0 0 200 200"
@@ -109,7 +108,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
               className="idle-ping-ring idle-ping-ring-2" />
           </svg>
 
-          {/* Magnifying glass — hidden once result arrives */}
           {!showResult && (
             <div className="idle-mag-wrap">
               <svg viewBox="0 0 44 48" width="40" height="44" aria-hidden="true">
@@ -125,7 +123,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
             </div>
           )}
 
-          {/* Result badge — drawn-in checkmark or X over the dimmed globe */}
           {showResult && (
             <div className="idle-result-badge">
               <svg viewBox="0 0 80 80" width="80" height="80" aria-hidden="true">
@@ -138,7 +135,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
                   className="idle-result-circle"
                 />
                 {isOk ? (
-                  /* Checkmark */
                   <path
                     d="M21 40 L33 52 L59 27"
                     fill="none"
@@ -149,7 +145,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
                     className="idle-result-check"
                   />
                 ) : (
-                  /* X — two separate lines so each draws independently */
                   <>
                     <line x1="26" y1="26" x2="54" y2="54"
                       stroke="#f43f5e" strokeWidth="4" strokeLinecap="round"
@@ -164,7 +159,6 @@ export default function LoadingScreen({ visible, checkState, onDismiss }: Props)
           )}
         </div>
 
-        {/* ── Text & actions ── */}
         <div className="idle-text">
           {showResult ? (
             <>

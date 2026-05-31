@@ -79,7 +79,6 @@ export default function RegionDataPanel({
 }) {
   const [forecastMode, setForecastMode] = useState<ForecastMode>("none");
 
-  // Reset forecast when the user switches region or disease
   useEffect(() => {
     setForecastMode("none");
   }, [region.code, disease]);
@@ -99,7 +98,6 @@ export default function RegionDataPanel({
   const em     = region.emissions[year];
   const emPrev = prevYear ? region.emissions[prevYear] : null;
 
-  // Memoised so forecastData doesn't recompute on unrelated renders
   const regionPoints = useMemo(
     () => years.map((y) => region.morbidity[y]?.[disease]?.per_100000 ?? null),
     [years, region.code, disease]
@@ -109,7 +107,6 @@ export default function RegionDataPanel({
     [years, disease]
   );
 
-  // Forecast — bestMethod called only once to avoid double computation
   const forecastData = useMemo(() => {
     if (forecastMode === "none") return null;
     const clean = regionPoints.filter((v): v is number => v != null);
@@ -161,7 +158,6 @@ export default function RegionDataPanel({
         <span className="region-code">{region.code}</span>
       </div>
 
-      {/* ── Morbidity table ── */}
       <div className="card">
         <div className="card-header">
           <h3>Заболеваемость · на 100 тыс.</h3>
@@ -188,7 +184,6 @@ export default function RegionDataPanel({
         <div className="table-hint">на 100 тыс. · абсолютное · к {prevYear ?? "—"}</div>
       </div>
 
-      {/* ── Trend chart + forecast controls ── */}
       <div className="card">
         <div className="card-header">
           <h3>Динамика · {diseaseLabel}</h3>
@@ -197,7 +192,6 @@ export default function RegionDataPanel({
         <div className="forecast-pills">
           {FORECAST_BUTTONS.map(({ key, label }) => {
             const isActive = forecastMode === key;
-            // Show resolved method name on the active "best" pill
             const displayLabel =
               isActive && key === "best" && forecastData
                 ? `★ ${METHOD_LABELS[forecastData.resolvedKey]}`
@@ -222,7 +216,6 @@ export default function RegionDataPanel({
         />
       </div>
 
-      {/* ── Context metrics — all available fields ── */}
       <div className="card">
         <div className="card-header">
           <h3>Контекст · {year}</h3>
