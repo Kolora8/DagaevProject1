@@ -378,17 +378,20 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
 	}
+	defer drows.Close()
 	var diseases []DiseaseMeta
 	for drows.Next() {
 		var d DiseaseMeta
 		if err := drows.Scan(&d.Key, &d.Label); err != nil {
-			drows.Close()
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
 		diseases = append(diseases, d)
 	}
-	drows.Close()
+	if err := drows.Err(); err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
 
 	yrows, err := db.QueryContext(ctx,
 		`SELECT DISTINCT year FROM morbidity ORDER BY year`)
@@ -396,17 +399,20 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 500, map[string]string{"error": err.Error()})
 		return
 	}
+	defer yrows.Close()
 	var years []string
 	for yrows.Next() {
 		var y string
 		if err := yrows.Scan(&y); err != nil {
-			yrows.Close()
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
 		years = append(years, y)
 	}
-	yrows.Close()
+	if err := yrows.Err(); err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
 
 	type regionInfo struct {
 		code string
@@ -615,6 +621,13 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 			rd.Emissions = map[string]*EmissionsVal{}
 		}
 		regions = append(regions, rd)
+	}
+
+	if years == nil {
+		years = []string{}
+	}
+	if diseases == nil {
+		diseases = []DiseaseMeta{}
 	}
 
 	result := &DatasetResponse{
