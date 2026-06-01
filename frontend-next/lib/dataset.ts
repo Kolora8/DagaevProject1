@@ -40,8 +40,8 @@ export interface Dataset {
 }
 
 export async function loadDataset(): Promise<Dataset> {
-  const res = await fetch("/morbidity.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("morbidity.json не найден");
+  const res = await fetch("/api/dataset");
+  if (!res.ok) throw new Error("dataset API недоступен");
   return res.json();
 }
 
