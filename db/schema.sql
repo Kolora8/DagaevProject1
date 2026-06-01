@@ -131,3 +131,59 @@ INSERT INTO devices (region_id, name, category, quantity, status)
 SELECT r.id, 'Аппарат ИВЛ', 'ИВЛ',
        (5 + floor(random()*20))::int, 'в эксплуатации'
 FROM regions r;
+
+-- ============================================================
+--  ДАННЫЕ О ЗАБОЛЕВАЕМОСТИ И ЭКОЛОГИИ
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS morbidity_regions (
+    code VARCHAR(8)   NOT NULL PRIMARY KEY,
+    name VARCHAR(128) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS morbidity_diseases (
+    key       VARCHAR(64)  NOT NULL PRIMARY KEY,
+    label     VARCHAR(128) NOT NULL,
+    order_idx INTEGER      NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS morbidity (
+    region_code      VARCHAR(8)    NOT NULL REFERENCES morbidity_regions(code),
+    year             VARCHAR(4)    NOT NULL,
+    disease_key      VARCHAR(64)   NOT NULL REFERENCES morbidity_diseases(key),
+    absolute_numbers NUMERIC(12,1) NOT NULL,
+    per_100000       NUMERIC(10,1) NOT NULL,
+    PRIMARY KEY (region_code, year, disease_key)
+);
+
+CREATE TABLE IF NOT EXISTS water_quality_data (
+    region_code         VARCHAR(8)   NOT NULL REFERENCES morbidity_regions(code),
+    year                VARCHAR(4)   NOT NULL,
+    safe_water_pct      NUMERIC(6,1) NOT NULL,
+    chem_violation_pct  NUMERIC(6,1) NOT NULL,
+    micro_violation_pct NUMERIC(6,1) NOT NULL,
+    pipe_violation_pct  NUMERIC(6,1) NOT NULL,
+    PRIMARY KEY (region_code, year)
+);
+
+CREATE TABLE IF NOT EXISTS emissions_data (
+    region_code   VARCHAR(8)    NOT NULL REFERENCES morbidity_regions(code),
+    year          VARCHAR(4)    NOT NULL,
+    total_kt      NUMERIC(12,2) NOT NULL,
+    per_capita_kg NUMERIC(8,1)  NOT NULL,
+    stationary_kt NUMERIC(12,2) NOT NULL,
+    mobile_kt     NUMERIC(12,2) NOT NULL,
+    PRIMARY KEY (region_code, year)
+);
+
+CREATE TABLE IF NOT EXISTS births_data (
+    region_code VARCHAR(8) NOT NULL REFERENCES morbidity_regions(code),
+    year        VARCHAR(4) NOT NULL,
+    count       INTEGER    NOT NULL,
+    PRIMARY KEY (region_code, year)
+);
+
+CREATE INDEX IF NOT EXISTS idx_morbidity_region  ON morbidity(region_code);
+CREATE INDEX IF NOT EXISTS idx_water_region      ON water_quality_data(region_code);
+CREATE INDEX IF NOT EXISTS idx_emissions_region  ON emissions_data(region_code);
+CREATE INDEX IF NOT EXISTS idx_births_region     ON births_data(region_code);
