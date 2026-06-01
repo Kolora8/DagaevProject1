@@ -457,6 +457,10 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 			}
 			list = append(list, ri)
 		}
+		if err := rows.Err(); err != nil {
+			setErr(err)
+			return
+		}
 		mu.Lock()
 		regionList = list
 		mu.Unlock()
@@ -490,6 +494,10 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 			val := v
 			m[code][year][dkey] = &val
 		}
+		if err := rows.Err(); err != nil {
+			setErr(err)
+			return
+		}
 		mu.Lock()
 		morb = m
 		mu.Unlock()
@@ -519,6 +527,10 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 			}
 			val := v
 			m[code][year] = &val
+		}
+		if err := rows.Err(); err != nil {
+			setErr(err)
+			return
 		}
 		mu.Lock()
 		waterMap = m
@@ -550,6 +562,10 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 			val := v
 			m[code][year] = &val
 		}
+		if err := rows.Err(); err != nil {
+			setErr(err)
+			return
+		}
 		mu.Lock()
 		emissMap = m
 		mu.Unlock()
@@ -577,6 +593,10 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 				m[code] = map[string]int{}
 			}
 			m[code][year] = count
+		}
+		if err := rows.Err(); err != nil {
+			setErr(err)
+			return
 		}
 		mu.Lock()
 		birthsMap = m
@@ -623,6 +643,9 @@ func getDataset(w http.ResponseWriter, r *http.Request) {
 		regions = append(regions, rd)
 	}
 
+	if regions == nil {
+		regions = []RegionDataset{}
+	}
 	if years == nil {
 		years = []string{}
 	}
