@@ -74,6 +74,62 @@ type RegionDetail struct {
 	Devices    []Device   `json:"devices"`
 }
 
+type MorbidityVal struct {
+	AbsoluteNumbers float64 `json:"absolute_numbers"`
+	Per100000       float64 `json:"per_100000"`
+}
+
+type WaterVal struct {
+	SafeWaterPct      float64 `json:"safe_water_pct"`
+	ChemViolationPct  float64 `json:"chem_violation_pct"`
+	MicroViolationPct float64 `json:"micro_violation_pct"`
+	PipeViolationPct  float64 `json:"pipe_violation_pct"`
+}
+
+type EmissionsVal struct {
+	TotalKt      float64 `json:"total_kt"`
+	PerCapitaKg  float64 `json:"per_capita_kg"`
+	StationaryKt float64 `json:"stationary_kt"`
+	MobileKt     float64 `json:"mobile_kt"`
+}
+
+type RegionDataset struct {
+	Code         string                              `json:"code"`
+	Name         string                              `json:"name"`
+	Morbidity    map[string]map[string]*MorbidityVal `json:"morbidity"`
+	Births       map[string]int                      `json:"births"`
+	WaterQuality map[string]*WaterVal                `json:"water_quality"`
+	Emissions    map[string]*EmissionsVal             `json:"emissions"`
+}
+
+type RFSection struct {
+	Morbidity map[string]map[string]*MorbidityVal `json:"morbidity"`
+}
+
+type DiseaseMeta struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+type DatasetMeta struct {
+	Years    []string      `json:"years"`
+	Diseases []DiseaseMeta `json:"diseases"`
+}
+
+type DatasetResponse struct {
+	Meta    DatasetMeta     `json:"meta"`
+	RF      RFSection       `json:"rf"`
+	Regions []RegionDataset `json:"regions"`
+}
+
+type datasetCache struct {
+	mu      sync.RWMutex
+	data    *DatasetResponse
+	expires time.Time
+}
+
+var dsCache datasetCache
+
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
@@ -304,6 +360,277 @@ func addDevice(w http.ResponseWriter, regionID int, r *http.Request) {
 	writeJSON(w, 201, body)
 }
 
+func getDataset(w http.ResponseWriter, r *http.Request) {
+	dsCache.mu.RLock()
+	if time.Now().Before(dsCache.expires) {
+		data := dsCache.data
+		dsCache.mu.RUnlock()
+		writeJSON(w, 200, data)
+		return
+	}
+	dsCache.mu.RUnlock()
+
+	ctx := r.Context()
+
+	drows, err := db.QueryContext(ctx,
+		`SELECT key, label FROM morbidity_diseases ORDER BY order_idx`)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	var diseases []DiseaseMeta
+	for drows.Next() {
+		var d DiseaseMeta
+		if err := drows.Scan(&d.Key, &d.Label); err != nil {
+			drows.Close()
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		diseases = append(diseases, d)
+	}
+	drows.Close()
+
+	yrows, err := db.QueryContext(ctx,
+		`SELECT DISTINCT year FROM morbidity ORDER BY year`)
+	if err != nil {
+		writeJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	var years []string
+	for yrows.Next() {
+		var y string
+		if err := yrows.Scan(&y); err != nil {
+			yrows.Close()
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		years = append(years, y)
+	}
+	yrows.Close()
+
+	type regionInfo struct {
+		code string
+		name string
+	}
+
+	var (
+		wg         sync.WaitGroup
+		mu         sync.Mutex
+		firstErr   error
+		regionList []regionInfo
+		morb       = map[string]map[string]map[string]*MorbidityVal{}
+		waterMap   = map[string]map[string]*WaterVal{}
+		emissMap   = map[string]map[string]*EmissionsVal{}
+		birthsMap  = map[string]map[string]int{}
+	)
+
+	setErr := func(e error) {
+		mu.Lock()
+		if firstErr == nil {
+			firstErr = e
+		}
+		mu.Unlock()
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rows, err := db.QueryContext(ctx,
+			`SELECT code, name FROM morbidity_regions ORDER BY code`)
+		if err != nil {
+			setErr(err)
+			return
+		}
+		defer rows.Close()
+		var list []regionInfo
+		for rows.Next() {
+			var ri regionInfo
+			if err := rows.Scan(&ri.code, &ri.name); err != nil {
+				setErr(err)
+				return
+			}
+			list = append(list, ri)
+		}
+		mu.Lock()
+		regionList = list
+		mu.Unlock()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rows, err := db.QueryContext(ctx,
+			`SELECT region_code, year, disease_key, absolute_numbers, per_100000
+			 FROM morbidity ORDER BY region_code, year, disease_key`)
+		if err != nil {
+			setErr(err)
+			return
+		}
+		defer rows.Close()
+		m := map[string]map[string]map[string]*MorbidityVal{}
+		for rows.Next() {
+			var code, year, dkey string
+			var v MorbidityVal
+			if err := rows.Scan(&code, &year, &dkey, &v.AbsoluteNumbers, &v.Per100000); err != nil {
+				setErr(err)
+				return
+			}
+			if m[code] == nil {
+				m[code] = map[string]map[string]*MorbidityVal{}
+			}
+			if m[code][year] == nil {
+				m[code][year] = map[string]*MorbidityVal{}
+			}
+			val := v
+			m[code][year][dkey] = &val
+		}
+		mu.Lock()
+		morb = m
+		mu.Unlock()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rows, err := db.QueryContext(ctx,
+			`SELECT region_code, year, safe_water_pct, chem_violation_pct, micro_violation_pct, pipe_violation_pct
+			 FROM water_quality_data ORDER BY region_code, year`)
+		if err != nil {
+			setErr(err)
+			return
+		}
+		defer rows.Close()
+		m := map[string]map[string]*WaterVal{}
+		for rows.Next() {
+			var code, year string
+			var v WaterVal
+			if err := rows.Scan(&code, &year, &v.SafeWaterPct, &v.ChemViolationPct, &v.MicroViolationPct, &v.PipeViolationPct); err != nil {
+				setErr(err)
+				return
+			}
+			if m[code] == nil {
+				m[code] = map[string]*WaterVal{}
+			}
+			val := v
+			m[code][year] = &val
+		}
+		mu.Lock()
+		waterMap = m
+		mu.Unlock()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rows, err := db.QueryContext(ctx,
+			`SELECT region_code, year, total_kt, per_capita_kg, stationary_kt, mobile_kt
+			 FROM emissions_data ORDER BY region_code, year`)
+		if err != nil {
+			setErr(err)
+			return
+		}
+		defer rows.Close()
+		m := map[string]map[string]*EmissionsVal{}
+		for rows.Next() {
+			var code, year string
+			var v EmissionsVal
+			if err := rows.Scan(&code, &year, &v.TotalKt, &v.PerCapitaKg, &v.StationaryKt, &v.MobileKt); err != nil {
+				setErr(err)
+				return
+			}
+			if m[code] == nil {
+				m[code] = map[string]*EmissionsVal{}
+			}
+			val := v
+			m[code][year] = &val
+		}
+		mu.Lock()
+		emissMap = m
+		mu.Unlock()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rows, err := db.QueryContext(ctx,
+			`SELECT region_code, year, count FROM births_data ORDER BY region_code, year`)
+		if err != nil {
+			setErr(err)
+			return
+		}
+		defer rows.Close()
+		m := map[string]map[string]int{}
+		for rows.Next() {
+			var code, year string
+			var count int
+			if err := rows.Scan(&code, &year, &count); err != nil {
+				setErr(err)
+				return
+			}
+			if m[code] == nil {
+				m[code] = map[string]int{}
+			}
+			m[code][year] = count
+		}
+		mu.Lock()
+		birthsMap = m
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	if firstErr != nil {
+		writeJSON(w, 500, map[string]string{"error": firstErr.Error()})
+		return
+	}
+
+	rfMorb := morb["RF"]
+	if rfMorb == nil {
+		rfMorb = map[string]map[string]*MorbidityVal{}
+	}
+
+	var regions []RegionDataset
+	for _, ri := range regionList {
+		if ri.code == "RF" {
+			continue
+		}
+		rd := RegionDataset{
+			Code:         ri.code,
+			Name:         ri.name,
+			Morbidity:    morb[ri.code],
+			Births:       birthsMap[ri.code],
+			WaterQuality: waterMap[ri.code],
+			Emissions:    emissMap[ri.code],
+		}
+		if rd.Morbidity == nil {
+			rd.Morbidity = map[string]map[string]*MorbidityVal{}
+		}
+		if rd.Births == nil {
+			rd.Births = map[string]int{}
+		}
+		if rd.WaterQuality == nil {
+			rd.WaterQuality = map[string]*WaterVal{}
+		}
+		if rd.Emissions == nil {
+			rd.Emissions = map[string]*EmissionsVal{}
+		}
+		regions = append(regions, rd)
+	}
+
+	result := &DatasetResponse{
+		Meta:    DatasetMeta{Years: years, Diseases: diseases},
+		RF:      RFSection{Morbidity: rfMorb},
+		Regions: regions,
+	}
+
+	dsCache.mu.Lock()
+	dsCache.data = result
+	dsCache.expires = time.Now().Add(5 * time.Minute)
+	dsCache.mu.Unlock()
+
+	writeJSON(w, 200, result)
+}
+
 func apiRouter(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
@@ -332,6 +659,9 @@ func apiRouter(w http.ResponseWriter, r *http.Request) {
 		} else {
 			writeJSON(w, 400, map[string]string{"error": "неверный id"})
 		}
+
+	case len(parts) == 1 && parts[0] == "dataset" && r.Method == http.MethodGet:
+		getDataset(w, r)
 
 	default:
 		writeJSON(w, 404, map[string]string{"error": "маршрут не найден"})
